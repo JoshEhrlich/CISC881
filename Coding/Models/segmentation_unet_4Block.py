@@ -15,52 +15,46 @@ def segmentation_unet(input_size, num_classes, filter_multiplier=10, regularizat
     input_ = Input((input_size, input_size, 1))
     skips = []
     output = input_
-
-    num_layers = 4#int(np.floor(np.log2(input_size))) #do not change (could add more if every other layer does not increase the image size)
+    
+    #instantiates the metric for block size and empty param arrays
+    num_layers = 4
     down_conv_kernel_sizes = np.zeros([num_layers], dtype=int)
-    down_filter_numbers = np.zeros([num_layers], dtype=int) #could change
-    up_conv_kernel_sizes = np.zeros([num_layers], dtype=int) #do not change
-    up_filter_numbers = np.zeros([num_layers], dtype=int) #could change
+    down_filter_numbers = np.zeros([num_layers], dtype=int)
+    up_conv_kernel_sizes = np.zeros([num_layers], dtype=int)
+    up_filter_numbers = np.zeros([num_layers], dtype=int)
     
     
-    #this for loop is good for modifications.
+    #this for loop sets standard sizes
     for layer_index in range(num_layers):
-        down_conv_kernel_sizes[layer_index] = int(3)
-        down_filter_numbers[layer_index] = (2**(layer_index)) * 16  #typical rule is the deeper you are the more filters. But there is no "real" method. Starting with 8 actually has meaning to check to see if yuo are going to each different pixels new line. You can double each layer (at deeper layers). num classes = 2
-        up_conv_kernel_sizes[layer_index] = int(2) #why is it four? Read up on this.
-        up_filter_numbers[layer_index] = 2**(num_layers - layer_index - 1) * 8 - 8 + num_classes
-        #have to make sure that in the final layer hte number of filters is two.
-    '''
-    
-    
-    for layer_index in range(num_layers):
-        down_conv_kernel_sizes[layer_index] = int(3)
-        down_filter_numbers[layer_index] = int((layer_index + 1) * filter_multiplier + num_classes) #typical rule is the deeper you are the more filters. But there is no "real" method. Starting with 8 actually has meaning to check to see if yuo are going to each different pixels new line. You can double each layer (at deeper layers). num classes = 2
-        up_conv_kernel_sizes[layer_index] = int(4) #why is it four? Read up on this.
-        up_filter_numbers[layer_index] = int((num_layers - layer_index - 1) * filter_multiplier + num_classes)
-        #have to make sure that in the final layer hte number of filters is two.
-    '''
-    #later on (after you mess with the above)
+        down_conv_kernel_sizes[layer_index] = int(3) #conv kernels on down
+        down_filter_numbers[layer_index] = (2**(layer_index)) * 16 #num filters on down
+        up_conv_kernel_sizes[layer_index] = int(2) #up conv kernels
+        up_filter_numbers[layer_index] = 2**(num_layers - layer_index - 1) * 8 - 8 + num_classes #up conv num filters
+ 
+
+    #This deals with the shape of each down block. Quite literally, the order you see it, is the order it unfolds in the architecture
     count = 0
     for shape, filters in zip(down_conv_kernel_sizes, down_filter_numbers):
          
         output = Conv2D(filters, (shape, shape), kernel_initializer="he_normal", padding = "same", strides=(1,1),  activation="relu"
-                        )(output) #, bias_regularizer=l1(regularization_rate),  
+                        )(output) 
         output = BatchNormalization()(output)
         output = SpatialDropout2D(0.3)(output)
         output = Conv2D(filters, (shape, shape), kernel_initializer="he_normal", padding = "same", strides=(1,1),  activation="relu"
-                        )(output) #, bias_regularizer=l1(regularization_rate),  
+                        )(output) 
         output = BatchNormalization()(output)
         output = MaxPooling2D(pool_size = (2,2))(output)
         skips.append(output)
         count += 1
-        
+    
+    #final down conv layer
     output = Conv2D(filters, (shape, shape), kernel_initializer="he_normal", padding = "same", strides=(2,2),  activation="relu"
                         )(output)
-    print([output])
+
     count = 0
+    #upsampling block, same as above. Order you see it is the order it exists in.
     for shape, filters in zip(up_conv_kernel_sizes, up_filter_numbers):
-        #output = UpSampling2D()(output)
+
         output = Conv2DTranspose(filters, (shape,shape), strides=(2,2), padding='same')(output)
         skip_output = skips.pop()
         output = concatenate([output, skip_output], axis=3)
@@ -74,22 +68,7 @@ def segmentation_unet(input_size, num_classes, filter_multiplier=10, regularizat
     output = Conv2DTranspose(filters, (shape,shape), strides=(2,2), padding='same')(output)
     output = Conv2D(filters, (shape, shape), strides = (1,1), activation="softmax", padding="same", 
                             bias_regularizer=l1(regularization_rate))(output)
-    '''
-    for shape, filters in zip(up_conv_kernel_sizes, up_filter_numbers):
-        print("UPSAMPLE")
-        #output = UpSampling2D()(output)
-        output = Conv2DTranspose(filters, (shape,shape), strides=(2,2), padding='same')(output)
-        skip_output = skips.pop()
-        output = concatenate([output, skip_output], axis=3) #axis = 3
-        if filters != num_classes:
-            output = Conv2D(filters, (shape, shape), activation="relu", strides = (2,2),-
-                            bias_regularizer=l1(regularization_rate))(output)
-            output = BatchNormalization(momentum=.9)(output)
-        else:
-            print("occurance of softmax")
-            output = Conv2D(filters, (shape, shape), activation="softmax", padding="same", 
-                            bias_regularizer=l1(regularization_rate))(output)
-    '''
+ 
     assert len(skips) == 0
     return Model([input_], [output])
 

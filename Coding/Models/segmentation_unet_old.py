@@ -21,18 +21,21 @@ def segmentation_unet(input_size, num_classes, filter_multiplier=10, regularizat
     down_filter_numbers = np.zeros([num_layers], dtype=int)
     up_conv_kernel_sizes = np.zeros([num_layers], dtype=int)
     up_filter_numbers = np.zeros([num_layers], dtype=int)
-
+    
+    #params
     for layer_index in range(num_layers):
         down_conv_kernel_sizes[layer_index] = int(3)
         down_filter_numbers[layer_index] = int((layer_index + 1) * filter_multiplier + num_classes)
         up_conv_kernel_sizes[layer_index] = int(4)
         up_filter_numbers[layer_index] = int((num_layers - layer_index - 1) * filter_multiplier + num_classes)
-
+    
+    #down layers
     for shape, filters in zip(down_conv_kernel_sizes, down_filter_numbers):
         skips.append(output)
         output = Conv2D(filters, (shape, shape), strides=2, padding="same", activation="relu",
                         bias_regularizer=l1(regularization_rate))(output)
-
+    
+    #up layers
     for shape, filters in zip(up_conv_kernel_sizes, up_filter_numbers):
         output = UpSampling2D()(output)
         skip_output = skips.pop()

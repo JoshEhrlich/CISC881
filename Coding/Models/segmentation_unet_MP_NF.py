@@ -26,70 +26,33 @@ def segmentation_unet(input_size, num_classes, filter_multiplier=10, regularizat
     #this for loop is good for modifications.
     for layer_index in range(num_layers):
         down_conv_kernel_sizes[layer_index] = int(3)
-        down_filter_numbers[layer_index] = (2**(layer_index)) * 16  #typical rule is the deeper you are the more filters. But there is no "real" method. Starting with 8 actually has meaning to check to see if yuo are going to each different pixels new line. You can double each layer (at deeper layers). num classes = 2
-        up_conv_kernel_sizes[layer_index] = int(2) #why is it four? Read up on this.
+        down_filter_numbers[layer_index] = (2**(layer_index)) * 8 # this is the number of filter modification 
+        up_conv_kernel_sizes[layer_index] = int(4).
         up_filter_numbers[layer_index] = 2**(num_layers - layer_index - 1) * 8 - 8 + num_classes
-        #have to make sure that in the final layer hte number of filters is two.
-    '''
-    
-    
-    for layer_index in range(num_layers):
-        down_conv_kernel_sizes[layer_index] = int(3)
-        down_filter_numbers[layer_index] = int((layer_index + 1) * filter_multiplier + num_classes) #typical rule is the deeper you are the more filters. But there is no "real" method. Starting with 8 actually has meaning to check to see if yuo are going to each different pixels new line. You can double each layer (at deeper layers). num classes = 2
-        up_conv_kernel_sizes[layer_index] = int(4) #why is it four? Read up on this.
-        up_filter_numbers[layer_index] = int((num_layers - layer_index - 1) * filter_multiplier + num_classes)
-        #have to make sure that in the final layer hte number of filters is two.
-    '''
-    #later on (after you mess with the above)
+
+    #downsampling layers
     count = 0
     for shape, filters in zip(down_conv_kernel_sizes, down_filter_numbers):
          
-        output = Conv2D(filters, (shape, shape), kernel_initializer="he_normal", padding = "same", strides=(1,1),  activation="relu"
-                        )(output) #, bias_regularizer=l1(regularization_rate),  
-        output = BatchNormalization()(output)
-        output = SpatialDropout2D(0.3)(output)
-        output = Conv2D(filters, (shape, shape), kernel_initializer="he_normal", padding = "same", strides=(1,1),  activation="relu"
-                        )(output) #, bias_regularizer=l1(regularization_rate),  
-        output = BatchNormalization()(output)
-        output = MaxPooling2D(pool_size = (2,2))(output)
+        output = Conv2D(filters, (shape, shape), strides=2, padding="same", activation="relu",
+                        bias_regularizer=l1(regularization_rate))(output)
+        output = MaxPooling2D(pool_size = (2,2), strides = 1, padding = "same")(output) #this is the maxpooling modification, could be kernel of (4,4)
         skips.append(output)
         count += 1
-        
-    output = Conv2D(filters, (shape, shape), kernel_initializer="he_normal", padding = "same", strides=(2,2),  activation="relu"
-                        )(output)
-    print([output])
-    count = 0
+    
+    #upsampling layers
     for shape, filters in zip(up_conv_kernel_sizes, up_filter_numbers):
-        #output = UpSampling2D()(output)
-        output = Conv2DTranspose(filters, (shape,shape), strides=(2,2), padding='same')(output)
+        output = UpSampling2D()(output)
         skip_output = skips.pop()
         output = concatenate([output, skip_output], axis=3)
-        output = Conv2D(filters, (shape, shape), activation="relu", padding='same', strides = (1,1),
-                            bias_regularizer=l1(regularization_rate))(output)
-        output = BatchNormalization(momentum=.9)(output)
-        output = Conv2D(filters, (shape, shape), activation="relu", padding='same', strides = (1,1),
-                            bias_regularizer=l1(regularization_rate))(output)
-        output = BatchNormalization(momentum=.9)(output)
-        
-    output = Conv2DTranspose(filters, (shape,shape), strides=(2,2), padding='same')(output)
-    output = Conv2D(filters, (shape, shape), strides = (1,1), activation="softmax", padding="same", 
-                            bias_regularizer=l1(regularization_rate))(output)
-    '''
-    for shape, filters in zip(up_conv_kernel_sizes, up_filter_numbers):
-        print("UPSAMPLE")
-        #output = UpSampling2D()(output)
-        output = Conv2DTranspose(filters, (shape,shape), strides=(2,2), padding='same')(output)
-        skip_output = skips.pop()
-        output = concatenate([output, skip_output], axis=3) #axis = 3
         if filters != num_classes:
-            output = Conv2D(filters, (shape, shape), activation="relu", strides = (2,2),-
+            output = Conv2D(filters, (shape, shape), activation="relu", padding="same",
                             bias_regularizer=l1(regularization_rate))(output)
             output = BatchNormalization(momentum=.9)(output)
         else:
-            print("occurance of softmax")
-            output = Conv2D(filters, (shape, shape), activation="softmax", padding="same", 
+            output = Conv2D(filters, (shape, shape), activation="softmax", padding="same",
                             bias_regularizer=l1(regularization_rate))(output)
-    '''
+
     assert len(skips) == 0
     return Model([input_], [output])
 
